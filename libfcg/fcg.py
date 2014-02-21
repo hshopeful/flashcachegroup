@@ -8,6 +8,17 @@ from libfcg import utils
 from libfcg.dmsetup import Dmsetup
 from libfcg.flashcache import Flashcache
 
+
+class Group:
+	Size = 0
+	Name = ""
+	partitions = [];
+	def __init__(self, group_name, size=None):
+		self.Size = size or utils.bytes2sectors('1P')
+		self.Name = group_name
+		
+
+
 class FCG():
 
 	def __init__(self, group_name):

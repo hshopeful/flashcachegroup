@@ -22,7 +22,7 @@ def get_dev_sector_count(dev):
 	if devSector <= 0:
 		raise Exception('Device %s is EMPTY...' % dev)
 	return devSector
-
+	
 def get_devname_from_major_minor(major_minor):
 	return '/dev/' + os.readlink('/dev/block/%s' % major_minor)[3:]
 
