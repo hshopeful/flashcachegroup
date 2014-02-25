@@ -58,26 +58,57 @@ class Disk:
 	dev=None
 	offset=None
 	major_minor=None
-	def __init__(self, dev=None):
-		if dev!=None:
-			self.dev=dev
-			self.size=utils.get_dev_sector_count(dev)
-			self.mapper='linear'
-			self.offset=0
-			self.start=0
+	major=None
+	minor=None
+	def __str__(self):
+		return '%d %d %s %s %d' % (self.start, self.size, self.mapper, self.dev, self.offset)
+	def __repr__(self):
+		return __str__(self)
+	def parse_line(line):
+		line = line.split()
+		if len(line) < 3:
+			return False
+		self.start = int(line[0])
+		self.size = int(line[1])
+		self.mapper = mapper = line[2]  # linear or error
+		if mapper=='linear':
+			self.major_minor = major_minor = line[3]
+			self.dev = utils.get_devname_from_major_minor(major_minor)
+			major_minor = major_minor.split(':')
+			self.major = int(major_minor[0])
+			self.minor = int(major_minor[1])
+			self.offset = int(line[4])
+		elif mapper=='error':
+			pass
+		else:
+			return False
+		return True
+	@staticmethod
+	def from_line(line):
+		disk = new Disk()
+		ok = disk.parse_line(line)
+		return ok and disk
+	@staticmethod
+	def create_linear_mapping(dev, size=None, offset=None):
+		self=Disk()
+		self.start   = 0
+		self.size    = size or utils.get_dev_sector_count(dev)
+		self.mapper  = 'linear'
+		self.dev     = dev
+		self.offset  = offset or 0
+	@staticmethod
+	def create_error_mapping(size):
+		self=Disk()
+		self.start   = 0
+		self.size    = size
+		self.mapper  = 'error'
+
 
 class LinearTable:
 	disks = []
-	def __init__(size, dev=None, offset=None):
-		disk=Disk()
-		disk.start=0;
-		disk.size=size;
-		disk.mapper='error'
-		if dev!=None:
-			disk.mapper = 'linear'
-			disk.offset = offset or 0
-			disk.dev = dev
-		disks.append(disk)
+	def __init__(size=None):
+		if size!=None:
+			self.disks = [Disk.create_error_mapping(size)]
 
 	def parse_text(text):
 		disks = []
@@ -86,23 +117,16 @@ class LinearTable:
 			line = line.split()
 			if len(line) < 3:
 				continue
-			disk=Disk()
-			disk.start = int(line[0])
-			disk.size = int(line[1])
-			disk.mapper = mapper = line[2]  # linear or error
-			if mapper=='linear':
-				disk.major_minor = major_minor = line[3]
-				disk.dev = utils.get_devname_from_major_minor(major_minor)
-				major_minor = major_minor.split(':')
-				disk.major = int(major_minor[0])
-				disk.minor = int(major_minor[1])
-				disk.offset = int(line[4])
-			elif mapper=='error':
-				pass
-			else:
-				continue;
-			disks.append(disk)
+			disk=Disk.from_line(line)
+			if disk:
+				disks.append(disk)
 		self.disks = disks
+
+	@staticmethod
+	def from_text(text):
+		table = LinearTable()
+		table.parse_text(text)
+		return table
 	
 	def _compute_starts(self):
 		start=0;
@@ -110,14 +134,9 @@ class LinearTable:
 			disk.start = start
 			start += disk.size
 
-	@staticmethod
-	def _format_disk(disk):
-		return '%d %d %s %s %s' % (disk.start, disk.size, disk.mapper, disk.dev, disk.offset)
-
-	def generate_text(self):
+	def __str__(self):
 		_compute_starts(self);
-		lines = [ _format_disk(disk) for disk in self.disks]
-		return '\n'.join(lines)
+		return '\n'.join(map(str, self.disks))
 
 	def insert_disk(newdisk):
 		for i in range(len(self.disks)):
@@ -137,12 +156,32 @@ class LinearTable:
 		return False 	# no enough space
 
 	def remove_disk(self, thedisk):
-		if isinstance(thedisk, Disk):
-			self.disks.remove(thedisk)
-		elif isinstance(thedisk, int):
-			thedisk=self.disks[thedisk]
-			self.disks.remove(thedisk)
+		length = len(self.disks)
+		for i in range(length):
+			disk = self.disks[i]
+			if disk.mapper=='linear' and disk.start==thedisk.start and disk.size==thedisk.size:
+				break;
+		if i==length:  
+			return False         # not found
+		
+		disk.mapper='error'
+		disk.dev=None
+		disk.major_minor=None
+		disk.major=None
+		disk.minor=None
+
+		j = i+1
+		while j<length:
+			next=self.disks[j]
+			if self.disks[j].mapper=='error':
+				disk.size+=next.size
+				self.disks.remove(next)
+			else:
+				j++
+
 		_compute_starts()
+
+
 
 
 

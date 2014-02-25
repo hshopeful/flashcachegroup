@@ -89,6 +89,24 @@ class FCG():
 		dm.reload_table(self.group_name, new_group_table)
 		dm.create_table(self._cached_disk_name(disk), cached_table)
 
+	def dm_get_table(self, dm, name):
+		name = name or self.group_name
+		try:
+			table_text = dm.get_table(name)
+			table=LinearTable.from_text(table_text)
+			return table
+		except Exception, e:
+			raise Exception("Group %s dose NOT exist..." % name)
+
+	def add_disk_(self, disk):
+		dm = Dmsetup()
+		table = self.dm_get_table(dm)
+		newdisk = Disk.create_linear_mapping(disk)
+		table.insert_disk(newdisk)
+		dm.reload_table(self.group_name, str(table))
+		cached_disk = Disk.create_linear_mapping(cache_dev, newdisk.size, newdisk.start)
+		dm.create_table(self._cached_disk_name(disk), str(cached_disk))
+
 	def rm_disk(self, disk):
 		dm = Dmsetup()
 		group_table = ''
@@ -155,6 +173,17 @@ class FCG():
 		fc.invalid(cache_dev, start_blk, offset_blk)
 		dm.remove_table(cached_name)
 		dm.reload_table(self.group_name, new_group_table)
+
+	def rm_disk_(self, disk):
+		dm = Dmsetup()
+		gtable = self.dm_get_table(dm)
+		cached_name = self._cached_disk_name(disk)
+		ctable = self.dm_get_table(dm, cached_name)
+		cdisk = ctable.disks[0]
+		gtable.remove_disk(cdisk)
+		dm.remove_table(cached_name)
+		dm.reload_table(self.group_name, str(gtable))
+
 
 	def delete_group(self):
 		dm = Dmsetup()
